@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Environment and sensitive secrets
+.env
+.env.*
+!.env.example
+*.pem
+oci_config
+
+# Provisioning state and logs
+created_instances.json
+*.log
+
+# Build output
+dist/
+
+# OS specific
+.DS_Store
+Thumbs.db
