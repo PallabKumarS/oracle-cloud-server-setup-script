@@ -60,7 +60,13 @@ This tool solves this by running an automated, resilient retry loop across multi
    - Integrated Gmail SMTP notification service via `src/sendMail.ts`.
    - Sends a formatted HTML email containing the instance name, account, region, assigned public IP, private IP, OCID, and SSH connection command as soon as a VM is provisioned.
 
-5. **State Persistence:**
+5. **Discord Notifications (Optional):**
+   - Set `DISCORD_WEBHOOK_URL` to enable. Implemented in `src/discord-notifier.ts` with zero extra dependencies.
+   - Posts a single **live status card** that is edited in place after every retry cycle: cycle number, attempt and out-of-capacity counters, per-account / per-instance status, and a countdown to the next attempt. Your channel doesn't get flooded with one message per retry.
+   - Sends separate rich embeds only for real events: launcher started, **VM created** (public/private IP, ready-to-copy `ssh` command, OCID), launch errors, account disabled, email failure, all instances provisioned, and fatal crashes.
+   - Respects Discord rate limits, and never interrupts the launcher if Discord is unreachable.
+
+6. **State Persistence:**
    - Tracks created instances in `created_instances.json` to prevent duplicate launches across restarts.
 
 ---
@@ -150,6 +156,10 @@ OCI_RETRY_INTERVAL_SECONDS=90
 # Email Alerts
 SENDER_EMAIL=your-email@gmail.com
 SENDER_APP_PASS=your-google-app-password
+
+# Discord Alerts (Optional)
+# Server Settings -> Integrations -> Webhooks -> New Webhook -> Copy Webhook URL
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/<id>/<token>
 ```
 
 ---
@@ -238,7 +248,8 @@ oracle-cloud-server-setup-script/
     ├── ad-resolver.ts            # Availability Domain resolution
     ├── vnic-helper.ts            # Public and private IP resolution helper
     ├── logger-filter.ts          # Terminal logging filter
-    └── sendMail.ts               # Gmail SMTP alert dispatcher
+    ├── sendMail.ts               # Gmail SMTP alert dispatcher
+    └── discord-notifier.ts       # Optional Discord webhook status card and alerts
 ```
 
 ---
