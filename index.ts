@@ -218,7 +218,12 @@ async function handleLaunchSuccess(
 	saveState(stateFilePath, records);
 
 	try {
-		console.log("Sending creation email notification to pallabkumar26@gmail.com...");
+		const targetEmail =
+			process.env.RECIPIENT_EMAIL?.trim() ||
+			process.env.NOTIFICATION_EMAIL?.trim() ||
+			process.env.SENDER_EMAIL?.trim() ||
+			"";
+		console.log(`Sending creation email notification to ${targetEmail}...`);
 		await sendServerCreatedEmail({
 			instanceName: targetName,
 			accountLabel: account.config.label,
@@ -235,7 +240,7 @@ async function handleLaunchSuccess(
 			privateIp,
 			timeCreated: record.createdAt,
 		});
-		console.log("Email notification sent successfully to pallabkumar26@gmail.com.");
+		console.log(`Email notification sent successfully to ${targetEmail}.`);
 	} catch (mailErr: unknown) {
 		const mailMsg = mailErr instanceof Error ? mailErr.message : String(mailErr);
 		console.error(`Failed to send email notification: ${mailMsg}`);

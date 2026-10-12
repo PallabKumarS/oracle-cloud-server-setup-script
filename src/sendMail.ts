@@ -17,12 +17,35 @@ export interface ServerEmailDetails {
 	timeCreated?: string;
 }
 
+const getSenderEmail = (): string => {
+	const sender = process.env.SENDER_EMAIL?.trim();
+	if (!sender) {
+		throw new Error("Missing SENDER_EMAIL environment variable.");
+	}
+	return sender;
+};
+
+const getRecipientEmail = (override?: string): string => {
+	const recipient =
+		override?.trim() ||
+		process.env.RECIPIENT_EMAIL?.trim() ||
+		process.env.NOTIFICATION_EMAIL?.trim() ||
+		process.env.SENDER_EMAIL?.trim();
+
+	if (!recipient) {
+		throw new Error(
+			"No recipient email configured. Set RECIPIENT_EMAIL or SENDER_EMAIL in .env.",
+		);
+	}
+	return recipient;
+};
+
 const createTransporter = () => {
-	const user = process.env.SENDER_EMAIL?.trim();
+	const user = getSenderEmail();
 	const pass = process.env.SENDER_APP_PASS?.trim();
 
-	if (!user || !pass) {
-		throw new Error("Missing SENDER_EMAIL or SENDER_APP_PASS environment variables.");
+	if (!pass) {
+		throw new Error("Missing SENDER_APP_PASS environment variable.");
 	}
 
 	return nodemailer.createTransport({
@@ -37,7 +60,7 @@ const createTransporter = () => {
 };
 
 export const sendEmail = async (to: string, subject: string, html: string) => {
-	const senderEmail = process.env.SENDER_EMAIL?.trim() || "pallabkumar26@gmail.com";
+	const senderEmail = getSenderEmail();
 	const transporter = createTransporter();
 
 	return transporter.sendMail({
@@ -50,8 +73,9 @@ export const sendEmail = async (to: string, subject: string, html: string) => {
 
 export const sendServerCreatedEmail = async (
 	details: ServerEmailDetails,
-	recipientEmail = "pallabkumar26@gmail.com",
+	targetRecipient?: string,
 ) => {
+	const recipientEmail = getRecipientEmail(targetRecipient);
 	const subject = `[Oracle Cloud] VM Created: ${details.instanceName} (${details.accountLabel})`;
 	const publicIpText = details.publicIp || "Pending / Not assigned";
 	const sshCmd = details.publicIp ? `ssh ubuntu@${details.publicIp}` : "N/A";
@@ -106,7 +130,7 @@ export const sendServerCreatedEmail = async (
       </div>
     </div>
     <div class="footer">
-      Sent by Oracle VM Launcher | Group Khata Automation
+      Sent by Oracle VM Launcher
     </div>
   </div>
 </body>
