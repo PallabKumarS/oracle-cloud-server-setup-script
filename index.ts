@@ -11,7 +11,7 @@ import { resolveImageId } from "./src/image-resolver.js";
 import { createLaunchDetails } from "./src/launch-details-builder.js";
 import { setupLogFilter } from "./src/logger-filter.js";
 import { resolveSubnet } from "./src/network-resolver.js";
-import { getRecipientEmail, isEmailConfigured, sendServerCreatedEmail } from "./src/sendMail.js";
+import { isEmailConfigured, resolveRecipientEmail, sendServerCreatedEmail } from "./src/sendMail.js";
 import type { AccountConfig, InstanceRecord, LaunchConfig } from "./src/types.js";
 import { fetchVnicIps } from "./src/vnic-helper.js";
 
@@ -217,7 +217,7 @@ async function handleLaunchSuccess(
 	records.push(record);
 	saveState(stateFilePath, records);
 
-	const recipientEmail = getRecipientEmail();
+	const recipientEmail = resolveRecipientEmail();
 	if (!isEmailConfigured() || !recipientEmail) {
 		console.log("Email notifications not configured (SENDER_EMAIL / SENDER_APP_PASS). Skipping email.");
 	} else {

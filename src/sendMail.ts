@@ -17,20 +17,43 @@ export interface ServerEmailDetails {
 	timeCreated?: string;
 }
 
-/** Recipient(s) for notifications: RECIPIENT_EMAIL (comma-separated allowed), falling back to SENDER_EMAIL. */
-export const getRecipientEmail = (): string | undefined =>
-	process.env.RECIPIENT_EMAIL?.trim() || process.env.SENDER_EMAIL?.trim() || undefined;
+const getSenderEmail = (): string => {
+	const sender = process.env.SENDER_EMAIL?.trim();
+	if (!sender) {
+		throw new Error("Missing SENDER_EMAIL environment variable.");
+	}
+	return sender;
+};
+
+/** Recipient(s) for notifications (comma-separated allowed), or undefined when none is configured. */
+export const resolveRecipientEmail = (override?: string): string | undefined =>
+	override?.trim() ||
+	process.env.RECIPIENT_EMAIL?.trim() ||
+	process.env.NOTIFICATION_EMAIL?.trim() ||
+	process.env.SENDER_EMAIL?.trim() ||
+	undefined;
+
+const getRecipientEmail = (override?: string): string => {
+	const recipient = resolveRecipientEmail(override);
+
+	if (!recipient) {
+		throw new Error(
+			"No recipient email configured. Set RECIPIENT_EMAIL or SENDER_EMAIL in .env.",
+		);
+	}
+	return recipient;
+};
 
 /** True when SMTP credentials and a recipient are configured. */
 export const isEmailConfigured = (): boolean =>
-	Boolean(process.env.SENDER_EMAIL?.trim() && process.env.SENDER_APP_PASS?.trim() && getRecipientEmail());
+	Boolean(process.env.SENDER_EMAIL?.trim() && process.env.SENDER_APP_PASS?.trim() && resolveRecipientEmail());
 
 const createTransporter = () => {
-	const user = process.env.SENDER_EMAIL?.trim();
+	const user = getSenderEmail();
 	const pass = process.env.SENDER_APP_PASS?.trim();
 
-	if (!user || !pass) {
-		throw new Error("Missing SENDER_EMAIL or SENDER_APP_PASS environment variables.");
+	if (!pass) {
+		throw new Error("Missing SENDER_APP_PASS environment variable.");
 	}
 
 	return nodemailer.createTransport({
@@ -45,8 +68,8 @@ const createTransporter = () => {
 };
 
 export const sendEmail = async (to: string, subject: string, html: string) => {
+	const senderEmail = getSenderEmail();
 	const transporter = createTransporter();
-	const senderEmail = process.env.SENDER_EMAIL?.trim();
 
 	return transporter.sendMail({
 		from: `"Oracle VM Launcher" <${senderEmail}>`,
@@ -58,12 +81,9 @@ export const sendEmail = async (to: string, subject: string, html: string) => {
 
 export const sendServerCreatedEmail = async (
 	details: ServerEmailDetails,
-	recipientEmail = getRecipientEmail(),
+	targetRecipient?: string,
 ) => {
-	if (!recipientEmail) {
-		throw new Error("Missing RECIPIENT_EMAIL (or SENDER_EMAIL) environment variable.");
-	}
-
+	const recipientEmail = getRecipientEmail(targetRecipient);
 	const subject = `[Oracle Cloud] VM Created: ${details.instanceName} (${details.accountLabel})`;
 	const publicIpText = details.publicIp || "Pending / Not assigned";
 	const sshCmd = details.publicIp ? `ssh ubuntu@${details.publicIp}` : "N/A";
@@ -118,7 +138,7 @@ export const sendServerCreatedEmail = async (
       </div>
     </div>
     <div class="footer">
-      Sent by Oracle VM Launcher | Group Khata Automation
+      Sent by Oracle VM Launcher
     </div>
   </div>
 </body>

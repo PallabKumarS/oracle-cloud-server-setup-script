@@ -152,7 +152,7 @@ OCI_RETRY_INTERVAL_SECONDS=90
 SENDER_EMAIL=your-email@gmail.com
 SENDER_APP_PASS=your-google-app-password
 # Where alerts are delivered (comma-separated for multiple). Defaults to SENDER_EMAIL.
-RECIPIENT_EMAIL=you@example.com
+RECIPIENT_EMAIL=your-recipient-email@gmail.com
 ```
 
 Email is optional: if `SENDER_EMAIL` / `SENDER_APP_PASS` are not set, the launcher skips the notification instead of failing.
