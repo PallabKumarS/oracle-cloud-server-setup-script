@@ -17,6 +17,14 @@ export interface ServerEmailDetails {
 	timeCreated?: string;
 }
 
+/** Recipient(s) for notifications: RECIPIENT_EMAIL (comma-separated allowed), falling back to SENDER_EMAIL. */
+export const getRecipientEmail = (): string | undefined =>
+	process.env.RECIPIENT_EMAIL?.trim() || process.env.SENDER_EMAIL?.trim() || undefined;
+
+/** True when SMTP credentials and a recipient are configured. */
+export const isEmailConfigured = (): boolean =>
+	Boolean(process.env.SENDER_EMAIL?.trim() && process.env.SENDER_APP_PASS?.trim() && getRecipientEmail());
+
 const createTransporter = () => {
 	const user = process.env.SENDER_EMAIL?.trim();
 	const pass = process.env.SENDER_APP_PASS?.trim();
@@ -37,8 +45,8 @@ const createTransporter = () => {
 };
 
 export const sendEmail = async (to: string, subject: string, html: string) => {
-	const senderEmail = process.env.SENDER_EMAIL?.trim() || "pallabkumar26@gmail.com";
 	const transporter = createTransporter();
+	const senderEmail = process.env.SENDER_EMAIL?.trim();
 
 	return transporter.sendMail({
 		from: `"Oracle VM Launcher" <${senderEmail}>`,
@@ -50,8 +58,12 @@ export const sendEmail = async (to: string, subject: string, html: string) => {
 
 export const sendServerCreatedEmail = async (
 	details: ServerEmailDetails,
-	recipientEmail = "pallabkumar26@gmail.com",
+	recipientEmail = getRecipientEmail(),
 ) => {
+	if (!recipientEmail) {
+		throw new Error("Missing RECIPIENT_EMAIL (or SENDER_EMAIL) environment variable.");
+	}
+
 	const subject = `[Oracle Cloud] VM Created: ${details.instanceName} (${details.accountLabel})`;
 	const publicIpText = details.publicIp || "Pending / Not assigned";
 	const sshCmd = details.publicIp ? `ssh ubuntu@${details.publicIp}` : "N/A";

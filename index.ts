@@ -11,7 +11,7 @@ import { resolveImageId } from "./src/image-resolver.js";
 import { createLaunchDetails } from "./src/launch-details-builder.js";
 import { setupLogFilter } from "./src/logger-filter.js";
 import { resolveSubnet } from "./src/network-resolver.js";
-import { sendServerCreatedEmail } from "./src/sendMail.js";
+import { getRecipientEmail, isEmailConfigured, sendServerCreatedEmail } from "./src/sendMail.js";
 import type { AccountConfig, InstanceRecord, LaunchConfig } from "./src/types.js";
 import { fetchVnicIps } from "./src/vnic-helper.js";
 
@@ -217,8 +217,30 @@ async function handleLaunchSuccess(
 	records.push(record);
 	saveState(stateFilePath, records);
 
+	const recipientEmail = getRecipientEmail();
+	if (!isEmailConfigured() || !recipientEmail) {
+		console.log("Email notifications not configured (SENDER_EMAIL / SENDER_APP_PASS). Skipping email.");
+	} else {
+		await sendCreationEmail(account, targetName, instance, launchConfig, record, recipientEmail);
+	}
+
+	const idx = account.pendingTargets.indexOf(targetName);
+	if (idx !== -1) {
+		account.pendingTargets.splice(idx, 1);
+	}
+}
+
+async function sendCreationEmail(
+	account: AccountRuntime,
+	targetName: string,
+	instance: core.models.Instance,
+	launchConfig: LaunchConfig,
+	record: InstanceRecord,
+	recipientEmail: string,
+) {
+	const { publicIp, privateIp } = record;
 	try {
-		console.log("Sending creation email notification to pallabkumar26@gmail.com...");
+		console.log(`Sending creation email notification to ${recipientEmail}...`);
 		await sendServerCreatedEmail({
 			instanceName: targetName,
 			accountLabel: account.config.label,
@@ -234,16 +256,11 @@ async function handleLaunchSuccess(
 			publicIp,
 			privateIp,
 			timeCreated: record.createdAt,
-		});
-		console.log("Email notification sent successfully to pallabkumar26@gmail.com.");
+		}, recipientEmail);
+		console.log(`Email notification sent successfully to ${recipientEmail}.`);
 	} catch (mailErr: unknown) {
 		const mailMsg = mailErr instanceof Error ? mailErr.message : String(mailErr);
 		console.error(`Failed to send email notification: ${mailMsg}`);
-	}
-
-	const idx = account.pendingTargets.indexOf(targetName);
-	if (idx !== -1) {
-		account.pendingTargets.splice(idx, 1);
 	}
 }
 
