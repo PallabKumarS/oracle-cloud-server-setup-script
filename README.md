@@ -156,6 +156,7 @@ OCI_RETRY_INTERVAL_SECONDS=90
 # Email Alerts
 SENDER_EMAIL=your-email@gmail.com
 SENDER_APP_PASS=your-google-app-password
+RECIPIENT_EMAIL=your-recipient-email@gmail.com
 
 # Discord Alerts (Optional)
 # Server Settings -> Integrations -> Webhooks -> New Webhook -> Copy Webhook URL
