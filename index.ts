@@ -7,6 +7,7 @@ import * as identity from "oci-identity";
 
 import { resolveAvailabilityDomain } from "./src/ad-resolver.js";
 import { getActiveAccountConfigs, getAuthProvider } from "./src/auth-provider.js";
+import { type AttemptResult, DiscordNotifier } from "./src/discord-notifier.js";
 import { resolveImageId } from "./src/image-resolver.js";
 import { createLaunchDetails } from "./src/launch-details-builder.js";
 import { setupLogFilter } from "./src/logger-filter.js";
@@ -20,6 +21,8 @@ const parentEnv = path.resolve(process.cwd(), "..", ".env");
 dotenv.config({ path: fs.existsSync(localEnv) ? localEnv : parentEnv });
 
 setupLogFilter();
+
+const discord = new DiscordNotifier();
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -217,6 +220,17 @@ async function handleLaunchSuccess(
 	records.push(record);
 	saveState(stateFilePath, records);
 
+	discord.created({
+		instanceName: targetName,
+		accountLabel: account.config.label,
+		region: account.region,
+		instanceId: instance.id,
+		lifecycleState: instance.lifecycleState,
+		faultDomain: instance.faultDomain,
+		publicIp,
+		privateIp,
+	});
+
 	try {
 		const targetEmail =
 			process.env.RECIPIENT_EMAIL?.trim() ||
@@ -244,6 +258,7 @@ async function handleLaunchSuccess(
 	} catch (mailErr: unknown) {
 		const mailMsg = mailErr instanceof Error ? mailErr.message : String(mailErr);
 		console.error(`Failed to send email notification: ${mailMsg}`);
+		discord.warn("Email notification failed", mailMsg);
 	}
 
 	const idx = account.pendingTargets.indexOf(targetName);
@@ -256,7 +271,7 @@ function handleLaunchError(
 	account: AccountRuntime,
 	targetName: string,
 	err: unknown,
-) {
+): AttemptResult {
 	const error = err as {
 		statusCode?: number;
 		serviceCode?: string;
@@ -279,10 +294,12 @@ function handleLaunchError(
 		if (msg.includes("Too many requests") || code === "TooManyRequests" || status === 429) {
 			account.activeInterval = Math.max(account.activeInterval + 5, 85);
 			console.log(`Rate limited on ${account.config.label}. Interval adjusted to ${account.activeInterval}s.`);
-		} else {
-			console.log(`Out of host capacity on ${account.config.label} for "${targetName}".`);
+			discord.attempt(account.config.label, targetName, "ratelimit");
+			return "ratelimit";
 		}
-		return;
+		console.log(`Out of host capacity on ${account.config.label} for "${targetName}".`);
+		discord.attempt(account.config.label, targetName, "capacity");
+		return "capacity";
 	}
 
 	console.log(`Failed on ${account.config.label} (Status: ${status}, Code: ${code}): ${msg}`);
@@ -291,7 +308,12 @@ function handleLaunchError(
 			`[AUTH/CONFIG ERROR] Account ${account.config.label} credentials or parameters rejected. Disabling this account.`,
 		);
 		account.isDisabled = true;
+		discord.attempt(account.config.label, targetName, "error");
+		discord.accountDisabled(account.config.label, `Status: ${status}, Code: ${code}\n${msg}`);
+	} else {
+		discord.attempt(account.config.label, targetName, "error", `Status: ${status}, Code: ${code}\n${msg}`);
 	}
+	return "error";
 }
 
 async function attemptAccountLaunch(
@@ -327,6 +349,7 @@ async function attemptAccountLaunch(
 
 	try {
 		const res = await account.computeClient.launchInstance(launchRequest);
+		discord.attempt(account.config.label, targetName, "created");
 		await handleLaunchSuccess(
 			account,
 			targetName,
@@ -379,10 +402,31 @@ async function main() {
 	}
 	console.log("=======================================================\n");
 
+	if (discord.enabled) {
+		console.log("Discord notifications enabled (DISCORD_WEBHOOK_URL).\n");
+	}
+	discord.started({
+		targets: launchConfig.targetInstanceNames,
+		shape: launchConfig.shape,
+		ocpus: launchConfig.ocpus,
+		memoryInGBs: launchConfig.memoryInGBs,
+		bootVolumeSize: launchConfig.bootVolumeSize,
+		bootVolumeVpu: launchConfig.bootVolumeVpu,
+		retryInterval: launchConfig.retryInterval,
+		accounts: accounts.map((a) => ({
+			label: a.config.label,
+			region: a.region,
+			pending: a.pendingTargets,
+			existing: launchConfig.targetInstanceNames.filter((n) => !a.pendingTargets.includes(n)),
+		})),
+	});
+
 	const totalPending = accounts.reduce((sum, a) => sum + a.pendingTargets.length, 0);
 	if (totalPending === 0) {
 		console.log("All target instances are already created across configured accounts.");
 		console.log(`State recorded in: ${stateFilePath}`);
+		discord.allProvisioned(records);
+		await discord.flush();
 		return;
 	}
 
@@ -409,6 +453,7 @@ async function main() {
 
 		const waitInterval = Math.max(...activeAccounts.map((a) => a.activeInterval), launchConfig.retryInterval);
 		console.log(`Cycle #${attemptRound} completed. Waiting ${waitInterval}s before next attempt round...`);
+		discord.cycleCompleted(attemptRound, waitInterval);
 		attemptRound++;
 		await sleep(waitInterval * 1000);
 	}
@@ -423,9 +468,13 @@ async function main() {
 	}
 	console.log("=======================================================\n");
 	console.log(`Saved provisioning summary to: ${stateFilePath}`);
+	discord.allProvisioned(records);
+	await discord.flush();
 }
 
-main().catch((err) => {
+main().catch(async (err) => {
 	console.error("\nUnexpected fatal error:", err);
+	discord.fatal(err);
+	await discord.flush();
 	process.exit(1);
 });
