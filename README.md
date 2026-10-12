@@ -59,6 +59,7 @@ This tool solves this by running an automated, resilient retry loop across multi
 4. **Instant Email Notifications:**
    - Integrated Gmail SMTP notification service via `src/sendMail.ts`.
    - Sends a formatted HTML email containing the instance name, account, region, assigned public IP, private IP, OCID, and SSH connection command as soon as a VM is provisioned.
+   - Delivered to `RECIPIENT_EMAIL` (comma-separated for multiple), defaulting to `SENDER_EMAIL`.
 
 5. **Discord Notifications (Optional):**
    - Set `DISCORD_WEBHOOK_URL` to enable. Implemented in `src/discord-notifier.ts` with zero extra dependencies.
@@ -156,12 +157,15 @@ OCI_RETRY_INTERVAL_SECONDS=90
 # Email Alerts
 SENDER_EMAIL=your-email@gmail.com
 SENDER_APP_PASS=your-google-app-password
+# Where alerts are delivered (comma-separated for multiple). Defaults to SENDER_EMAIL.
 RECIPIENT_EMAIL=your-recipient-email@gmail.com
 
 # Discord Alerts (Optional)
 # Server Settings -> Integrations -> Webhooks -> New Webhook -> Copy Webhook URL
 DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/<id>/<token>
 ```
+
+Email is optional: if `SENDER_EMAIL` / `SENDER_APP_PASS` are not set, the launcher skips the notification instead of failing.
 
 ---
 
@@ -224,8 +228,8 @@ When capacity is found:
 Connect with:
   ssh ubuntu@140.238.xxx.xxx
 
-Sending creation email notification to pallabkumar26@gmail.com...
-Email notification sent successfully to pallabkumar26@gmail.com.
+Sending creation email notification to you@example.com...
+Email notification sent successfully to you@example.com.
 ```
 
 ---

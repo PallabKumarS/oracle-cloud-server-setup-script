@@ -12,7 +12,7 @@ import { resolveImageId } from "./src/image-resolver.js";
 import { createLaunchDetails } from "./src/launch-details-builder.js";
 import { setupLogFilter } from "./src/logger-filter.js";
 import { resolveSubnet } from "./src/network-resolver.js";
-import { sendServerCreatedEmail } from "./src/sendMail.js";
+import { isEmailConfigured, resolveRecipientEmail, sendServerCreatedEmail } from "./src/sendMail.js";
 import type { AccountConfig, InstanceRecord, LaunchConfig } from "./src/types.js";
 import { fetchVnicIps } from "./src/vnic-helper.js";
 
@@ -232,12 +232,7 @@ async function handleLaunchSuccess(
 	});
 
 	try {
-		const targetEmail =
-			process.env.RECIPIENT_EMAIL?.trim() ||
-			process.env.NOTIFICATION_EMAIL?.trim() ||
-			process.env.SENDER_EMAIL?.trim() ||
-			"";
-		console.log(`Sending creation email notification to ${targetEmail}...`);
+		console.log(`Sending creation email notification to ${recipientEmail}...`);
 		await sendServerCreatedEmail({
 			instanceName: targetName,
 			accountLabel: account.config.label,
@@ -253,17 +248,12 @@ async function handleLaunchSuccess(
 			publicIp,
 			privateIp,
 			timeCreated: record.createdAt,
-		});
-		console.log(`Email notification sent successfully to ${targetEmail}.`);
+		}, recipientEmail);
+		console.log(`Email notification sent successfully to ${recipientEmail}.`);
 	} catch (mailErr: unknown) {
 		const mailMsg = mailErr instanceof Error ? mailErr.message : String(mailErr);
 		console.error(`Failed to send email notification: ${mailMsg}`);
 		discord.warn("Email notification failed", mailMsg);
-	}
-
-	const idx = account.pendingTargets.indexOf(targetName);
-	if (idx !== -1) {
-		account.pendingTargets.splice(idx, 1);
 	}
 }
 

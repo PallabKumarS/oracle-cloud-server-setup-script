@@ -25,12 +25,16 @@ const getSenderEmail = (): string => {
 	return sender;
 };
 
+/** Recipient(s) for notifications (comma-separated allowed), or undefined when none is configured. */
+export const resolveRecipientEmail = (override?: string): string | undefined =>
+	override?.trim() ||
+	process.env.RECIPIENT_EMAIL?.trim() ||
+	process.env.NOTIFICATION_EMAIL?.trim() ||
+	process.env.SENDER_EMAIL?.trim() ||
+	undefined;
+
 const getRecipientEmail = (override?: string): string => {
-	const recipient =
-		override?.trim() ||
-		process.env.RECIPIENT_EMAIL?.trim() ||
-		process.env.NOTIFICATION_EMAIL?.trim() ||
-		process.env.SENDER_EMAIL?.trim();
+	const recipient = resolveRecipientEmail(override);
 
 	if (!recipient) {
 		throw new Error(
@@ -39,6 +43,10 @@ const getRecipientEmail = (override?: string): string => {
 	}
 	return recipient;
 };
+
+/** True when SMTP credentials and a recipient are configured. */
+export const isEmailConfigured = (): boolean =>
+	Boolean(process.env.SENDER_EMAIL?.trim() && process.env.SENDER_APP_PASS?.trim() && resolveRecipientEmail());
 
 const createTransporter = () => {
 	const user = getSenderEmail();
